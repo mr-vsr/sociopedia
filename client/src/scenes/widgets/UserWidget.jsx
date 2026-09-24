@@ -1,148 +1,137 @@
+import { useEffect, useState } from "react";
 import {
-  ManageAccountsOutlined,
-  EditOutlined,
+  ArrowOutwardRounded,
   LocationOnOutlined,
   WorkOutlineOutlined,
 } from "@mui/icons-material";
-import { Box, Typography, Divider, useTheme } from "@mui/material";
-import UserImage from "components/UserImage";
-import FlexBetween from "components/FlexBetween";
-import WidgetWrapper from "components/WidgetWrapper";
+import { Box, Divider, Typography } from "@mui/material";
 import { useSelector } from "react-redux";
-import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useApi } from "api";
+import UserImage from "components/UserImage";
+import WidgetWrapper from "components/WidgetWrapper";
+import AnimatedNumber from "components/AnimatedNumber";
+import { CardSkeleton } from "components/Skeleton";
 
-const UserWidget = ({ userId, picturePath }) => {
+const Stat = ({ label, value }) => (
+  <Box sx={{ flex: 1, textAlign: "center" }}>
+    <Typography className="serif" sx={{ fontSize: 26, fontWeight: 600, color: "text.primary", lineHeight: 1.1 }}>
+      <AnimatedNumber value={value} compact />
+    </Typography>
+    <Typography variant="overline" sx={{ color: "text.secondary", fontSize: 9.5 }}>
+      {label}
+    </Typography>
+  </Box>
+);
+
+const Social = ({ icon, name, sub }) => (
+  <Box
+    sx={{
+      display: "flex",
+      alignItems: "center",
+      gap: 1.5,
+      p: 1,
+      mx: -1,
+      borderRadius: "12px",
+      transition: "background-color .2s",
+      "&:hover": { bgcolor: "neutral.light" },
+      "&:hover .arrow": { opacity: 1, transform: "translate(0,0)" },
+    }}
+  >
+    <Box component="img" src={icon} alt={name} sx={{ width: 22, height: 22, opacity: 0.85 }} />
+    <Box sx={{ flex: 1 }}>
+      <Typography variant="h6" sx={{ color: "text.primary" }}>
+        {name}
+      </Typography>
+      <Typography sx={{ fontSize: 11.5, color: "text.secondary" }}>{sub}</Typography>
+    </Box>
+    <ArrowOutwardRounded
+      className="arrow"
+      sx={{ fontSize: 16, color: "accent.main", opacity: 0, transform: "translate(-4px,4px)", transition: "all .25s" }}
+    />
+  </Box>
+);
+
+const UserWidget = ({ userId }) => {
   const [user, setUser] = useState(null);
-  const { palette } = useTheme();
+  const [error, setError] = useState("");
+  const api = useApi();
   const navigate = useNavigate();
-  const token = useSelector((state) => state.token);
-  const dark = palette.neutral.dark;
-  const medium = palette.neutral.medium;
-  const main = palette.neutral.main;
-
-  const getUser = async () => {
-    const response = await fetch(`http://localhost:3001/users/${userId}`, {
-      method: "GET",
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const data = await response.json();
-    setUser(data);
-  };
+  const me = useSelector((s) => s.user);
+  const isMe = me._id === userId;
 
   useEffect(() => {
-    getUser();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    let alive = true;
+    setUser(null);
+    setError("");
+    api(`/users/${userId}`)
+      .then((u) => alive && setUser(u))
+      .catch((e) => alive && setError(e.message));
+    return () => {
+      alive = false;
+    };
+  }, [userId, api]);
 
-  if (!user) {
-    return null;
+  if (error) {
+    return (
+      <WidgetWrapper>
+        <Typography sx={{ color: "text.secondary" }}>{error}</Typography>
+      </WidgetWrapper>
+    );
   }
+  if (!user) return <CardSkeleton />;
 
-  const {
-    firstName,
-    lastName,
-    location,
-    occupation,
-    viewedProfile,
-    impressions,
-    friends,
-  } = user;
+  const { firstName, lastName, location, occupation, viewedProfile, impressions, picturePath } = user;
+  const friendsCount = isMe ? (me.friends || []).length : (user.friends || []).length;
+  const name = `${firstName} ${lastName}`;
 
   return (
-    <WidgetWrapper>
-      {/* FIRST ROW */}
-      <FlexBetween
-        gap="0.5rem"
-        pb="1.1rem"
+    <WidgetWrapper data-testid="user-widget">
+      <Box
         onClick={() => navigate(`/profile/${userId}`)}
+        sx={{ display: "flex", alignItems: "center", gap: 1.8, cursor: "pointer", "&:hover .uname": { color: "accent.main" } }}
       >
-        <FlexBetween gap="1rem">
-          <UserImage image={picturePath} />
-          <Box>
-            <Typography
-              variant="h4"
-              color={dark}
-              fontWeight="500"
-              sx={{
-                "&:hover": {
-                  color: palette.primary.light,
-                  cursor: "pointer",
-                },
-              }}
-            >
-              {firstName} {lastName}
-            </Typography>
-            <Typography color={medium}>{friends.length} friends</Typography>
-          </Box>
-        </FlexBetween>
-        <ManageAccountsOutlined />
-      </FlexBetween>
-
-      <Divider />
-
-      {/* SECOND ROW */}
-      <Box p="1rem 0">
-        <Box display="flex" alignItems="center" gap="1rem" mb="0.5rem">
-          <LocationOnOutlined fontSize="large" sx={{ color: main }} />
-          <Typography color={medium}>{location}</Typography>
-        </Box>
-        <Box display="flex" alignItems="center" gap="1rem">
-          <WorkOutlineOutlined fontSize="large" sx={{ color: main }} />
-          <Typography color={medium}>{occupation}</Typography>
+        <UserImage image={picturePath} name={name} size="60px" />
+        <Box sx={{ minWidth: 0 }}>
+          <Typography className="uname" variant="h4" noWrap sx={{ color: "text.primary", transition: "color .25s", lineHeight: 1.15 }}>
+            {name}
+          </Typography>
+          <Typography sx={{ color: "text.secondary", fontSize: 12.5 }} data-testid="friends-count">
+            {friendsCount} {friendsCount === 1 ? "friend" : "friends"}
+          </Typography>
         </Box>
       </Box>
 
-      <Divider />
-
-      {/* THIRD ROW */}
-      <Box p="1rem 0">
-        <FlexBetween mb="0.5rem">
-          <Typography color={medium}>Who's viewed your profile</Typography>
-          <Typography color={main} fontWeight="500">
-            {viewedProfile}
-          </Typography>
-        </FlexBetween>
-        <FlexBetween>
-          <Typography color={medium}>Impressions of your post</Typography>
-          <Typography color={main} fontWeight="500">
-            {impressions}
-          </Typography>
-        </FlexBetween>
+      <Box sx={{ display: "grid", gap: 1.2, my: 2.5 }}>
+        {[
+          [LocationOnOutlined, location],
+          [WorkOutlineOutlined, occupation],
+        ]
+          .filter(([, v]) => v)
+          .map(([Icon, v]) => (
+            <Box key={v} sx={{ display: "flex", alignItems: "center", gap: 1.3 }}>
+              <Icon sx={{ fontSize: 19, color: "accent.main" }} />
+              <Typography sx={{ color: "text.secondary", fontSize: 13 }}>{v}</Typography>
+            </Box>
+          ))}
       </Box>
 
       <Divider />
+      <Box sx={{ display: "flex", py: 2 }}>
+        <Stat label="Profile views" value={viewedProfile} />
+        <Divider orientation="vertical" flexItem />
+        <Stat label="Impressions" value={impressions} />
+      </Box>
+      <Divider />
 
-      {/* FOURTH ROW */}
-      <Box p="1rem 0">
-        <Typography fontSize="1rem" color={main} fontWeight="500" mb="1rem">
-          Social Profiles
+      <Box sx={{ pt: 2 }}>
+        <Typography variant="overline" sx={{ color: "text.secondary" }}>
+          Elsewhere
         </Typography>
-
-        <FlexBetween gap="1rem" mb="0.5rem">
-          <FlexBetween gap="1rem">
-            <img src="../assets/twitter.png" alt="twitter" />
-            <Box>
-              <Typography color={main} fontWeight="500">
-                Twitter
-              </Typography>
-              <Typography color={medium}>Social Network</Typography>
-            </Box>
-          </FlexBetween>
-          <EditOutlined sx={{ color: main }} />
-        </FlexBetween>
-
-        <FlexBetween gap="1rem">
-          <FlexBetween gap="1rem">
-            <img src="../assets/linkedin.png" alt="linkedin" />
-            <Box>
-              <Typography color={main} fontWeight="500">
-                Linkedin
-              </Typography>
-              <Typography color={medium}>Network Platform</Typography>
-            </Box>
-          </FlexBetween>
-          <EditOutlined sx={{ color: main }} />
-        </FlexBetween>
+        <Box sx={{ mt: 1, display: "grid", gap: 0.3 }}>
+          <Social icon="/assets/twitter.png" name="Twitter" sub="Social network" />
+          <Social icon="/assets/linkedin.png" name="LinkedIn" sub="Professional network" />
+        </Box>
       </Box>
     </WidgetWrapper>
   );

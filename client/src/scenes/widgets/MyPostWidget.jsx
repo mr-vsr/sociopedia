@@ -1,171 +1,187 @@
-import {
-  EditOutlined,
-  DeleteOutlined,
-  AttachFileOutlined,
-  GifBoxOutlined,
-  ImageOutlined,
-  MicOutlined,
-  MoreHorizOutlined,
-} from "@mui/icons-material";
-import {
-  Box,
-  Divider,
-  Typography,
-  InputBase,
-  useTheme,
-  Button,
-  IconButton,
-  useMediaQuery,
-} from "@mui/material";
-import FlexBetween from "components/FlexBetween";
-import Dropzone from "react-dropzone";
-import UserImage from "components/UserImage";
-import WidgetWrapper from "components/WidgetWrapper";
 import { useState } from "react";
+import { CloseRounded, ImageOutlined } from "@mui/icons-material";
+import { Box, Button, CircularProgress, IconButton, InputBase, Typography } from "@mui/material";
+import { AnimatePresence, motion } from "framer-motion";
+import Dropzone from "react-dropzone";
 import { useDispatch, useSelector } from "react-redux";
 import { setPosts } from "state";
+import { useApi } from "api";
+import UserImage from "components/UserImage";
+import WidgetWrapper from "components/WidgetWrapper";
+import FilePreview from "components/FilePreview";
+import { useToast } from "components/Toast";
+import { ease } from "components/motion";
 
-const MyPostWidget = ({ picturePath }) => {
+const MAX = 2000;
+const IMAGE_TYPES = { "image/jpeg": [], "image/png": [], "image/webp": [], "image/gif": [] };
+
+const MyPostWidget = ({ onlyUserId }) => {
   const dispatch = useDispatch();
-  const [isImage, setIsImage] = useState(false);
+  const api = useApi();
+  const toast = useToast();
+  const [showDrop, setShowDrop] = useState(false);
   const [image, setImage] = useState(null);
   const [post, setPost] = useState("");
-  const { palette } = useTheme();
-  const { _id } = useSelector((state) => state.user);
-  const token = useSelector((state) => state.token);
-  const isNonMobileScreens = useMediaQuery("(min-width: 1000px)");
-  const mediumMain = palette.neutral.mediumMain;
-  const medium = palette.neutral.medium;
+  const [busy, setBusy] = useState(false);
+  const user = useSelector((state) => state.user);
+  const canPost = (post.trim() || image) && post.length <= MAX && !busy;
 
   const handlePost = async () => {
+    if (!canPost) return;
     const formData = new FormData();
-    formData.append("userId", _id);
-    formData.append("description", post);
-    if (image) {
-      formData.append("picture", image);
-      formData.append("picturePath", image.name);
-    }
+    formData.append("description", post.trim());
+    if (image) formData.append("picture", image);
 
-    const response = await fetch(`http://localhost:3001/posts`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-      body: formData,
-    });
-    const posts = await response.json();
-    dispatch(setPosts({ posts }));
-    setImage(null);
-    setPost("");
+    setBusy(true);
+    try {
+      const posts = await api("/posts", { method: "POST", body: formData });
+      dispatch(setPosts({ posts: onlyUserId ? posts.filter((p) => p.userId === onlyUserId) : posts }));
+      setImage(null);
+      setShowDrop(false);
+      setPost("");
+      toast("Shared with your circle");
+    } catch (err) {
+      toast(err.message, "error");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
-    <WidgetWrapper>
-      <FlexBetween gap="1.5rem">
-        <UserImage image={picturePath} />
+    <WidgetWrapper sx={{ mb: 3 }} data-testid="composer">
+      <Box sx={{ display: "flex", gap: 1.8, alignItems: "flex-start" }}>
+        <UserImage image={user.picturePath} name={`${user.firstName} ${user.lastName}`} size="48px" />
         <InputBase
-          placeholder="What's on your mind..."
+          multiline
+          minRows={2}
+          maxRows={10}
+          placeholder={`What's on your mind, ${user.firstName}?`}
           onChange={(e) => setPost(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handlePost();
+          }}
           value={post}
+          inputProps={{ "data-testid": "composer-input", "aria-label": "New post" }}
           sx={{
-            width: "100%",
-            backgroundColor: palette.neutral.light,
-            borderRadius: "2rem",
-            padding: "1rem 2rem",
+            flex: 1,
+            fontSize: 15,
+            px: 2,
+            py: 1.4,
+            borderRadius: "18px",
+            bgcolor: "neutral.light",
+            border: (t) => `1px solid ${t.palette.divider}`,
+            transition: "box-shadow .25s, border-color .25s",
+            "&.Mui-focused": {
+              borderColor: "accent.main",
+              boxShadow: (t) => `0 0 0 4px ${t.palette.mode === "dark" ? "rgba(196,164,110,0.12)" : "rgba(31,61,47,0.08)"}`,
+            },
           }}
         />
-      </FlexBetween>
-      {isImage && (
-        <Box
-          border={`1px solid ${medium}`}
-          borderRadius="5px"
-          mt="1rem"
-          p="1rem"
-        >
-          <Dropzone
-            acceptedFiles=".jpg,.jpeg,.png"
-            multiple={false}
-            onDrop={(acceptedFiles) => setImage(acceptedFiles[0])}
+      </Box>
+
+      <AnimatePresence initial={false}>
+        {showDrop && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1, transition: { duration: 0.35, ease } }}
+            exit={{ height: 0, opacity: 0, transition: { duration: 0.25, ease } }}
+            style={{ overflow: "hidden" }}
           >
-            {({ getRootProps, getInputProps }) => (
-              <FlexBetween>
+            <Box sx={{ pt: 2 }}>
+              {image ? (
                 <Box
-                  {...getRootProps()}
-                  border={`2px dashed ${palette.primary.main}`}
-                  p="1rem"
-                  width="100%"
-                  sx={{ "&:hover": { cursor: "pointer" } }}
+                  component={motion.div}
+                  initial={{ opacity: 0, scale: 0.97 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  sx={{ position: "relative", borderRadius: "16px", overflow: "hidden", maxHeight: 360 }}
                 >
-                  <input {...getInputProps()} />
-                  {!image ? (
-                    <p>Add Image Here</p>
-                  ) : (
-                    <FlexBetween>
-                      <Typography>{image.name}</Typography>
-                      <EditOutlined />
-                    </FlexBetween>
-                  )}
-                </Box>
-                {image && (
+                  <FilePreview file={image} style={{ width: "100%", maxHeight: 360, objectFit: "cover", display: "block" }} />
                   <IconButton
                     onClick={() => setImage(null)}
-                    sx={{ width: "15%" }}
+                    aria-label="Remove image"
+                    className="glass"
+                    sx={{ position: "absolute", top: 10, right: 10, color: "text.primary", "&:hover": { bgcolor: (t) => t.palette.glass.bgStrong } }}
                   >
-                    <DeleteOutlined />
+                    <CloseRounded fontSize="small" />
                   </IconButton>
-                )}
-              </FlexBetween>
-            )}
-          </Dropzone>
-        </Box>
-      )}
-
-      <Divider sx={{ margin: "1.25rem 0" }} />
-
-      <FlexBetween>
-        <FlexBetween gap="0.25rem" onClick={() => setIsImage(!isImage)}>
-          <ImageOutlined sx={{ color: mediumMain }} />
-          <Typography
-            color={mediumMain}
-            sx={{ "&:hover": { cursor: "pointer", color: medium } }}
-          >
-            Image
-          </Typography>
-        </FlexBetween>
-
-        {isNonMobileScreens ? (
-          <>
-            <FlexBetween gap="0.25rem">
-              <GifBoxOutlined sx={{ color: mediumMain }} />
-              <Typography color={mediumMain}>Clip</Typography>
-            </FlexBetween>
-
-            <FlexBetween gap="0.25rem">
-              <AttachFileOutlined sx={{ color: mediumMain }} />
-              <Typography color={mediumMain}>Attachment</Typography>
-            </FlexBetween>
-
-            <FlexBetween gap="0.25rem">
-              <MicOutlined sx={{ color: mediumMain }} />
-              <Typography color={mediumMain}>Audio</Typography>
-            </FlexBetween>
-          </>
-        ) : (
-          <FlexBetween gap="0.25rem">
-            <MoreHorizOutlined sx={{ color: mediumMain }} />
-          </FlexBetween>
+                </Box>
+              ) : (
+                <Dropzone
+                  accept={IMAGE_TYPES}
+                  maxSize={5 * 1024 * 1024}
+                  multiple={false}
+                  onDrop={(files) => files[0] && setImage(files[0])}
+                  onDropRejected={() => toast("Use a JPG, PNG, WEBP or GIF under 5MB", "error")}
+                >
+                  {({ getRootProps, getInputProps, isDragActive }) => (
+                    <Box
+                      {...getRootProps()}
+                      sx={{
+                        py: 4,
+                        textAlign: "center",
+                        borderRadius: "16px",
+                        cursor: "pointer",
+                        border: (t) => `1.5px dashed ${isDragActive ? t.palette.accent.main : t.palette.divider}`,
+                        bgcolor: isDragActive ? "primary.light" : "transparent",
+                        transition: "all .25s",
+                        "&:hover": { borderColor: "accent.main" },
+                      }}
+                    >
+                      <input {...getInputProps()} data-testid="composer-file" />
+                      <ImageOutlined sx={{ color: "accent.main", fontSize: 30, mb: 0.5 }} />
+                      <Typography variant="h6" sx={{ color: "text.primary" }}>
+                        {isDragActive ? "Drop to attach" : "Drag a photograph here"}
+                      </Typography>
+                      <Typography sx={{ fontSize: 12, color: "text.secondary" }}>or click to browse · up to 5MB</Typography>
+                    </Box>
+                  )}
+                </Dropzone>
+              )}
+            </Box>
+          </motion.div>
         )}
+      </AnimatePresence>
 
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mt: 2, gap: 1 }}>
         <Button
-          disabled={!post}
-          onClick={handlePost}
+          onClick={() => setShowDrop((s) => !s)}
+          startIcon={<ImageOutlined />}
+          data-testid="composer-image-toggle"
           sx={{
-            color: palette.background.alt,
-            backgroundColor: palette.primary.main,
-            borderRadius: "3rem",
+            color: showDrop ? "accent.main" : "text.secondary",
+            bgcolor: showDrop ? "primary.light" : "transparent",
+            px: 1.8,
+            "&:hover": { bgcolor: "neutral.light", color: "accent.main" },
           }}
         >
-          POST
+          Photo
         </Button>
-      </FlexBetween>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+          <AnimatePresence>
+            {post.length > MAX * 0.8 && (
+              <Typography
+                component={motion.span}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                sx={{ fontSize: 12, color: post.length > MAX ? "error.main" : "text.secondary" }}
+              >
+                {MAX - post.length}
+              </Typography>
+            )}
+          </AnimatePresence>
+          <Button
+            variant="contained"
+            disabled={!canPost}
+            onClick={handlePost}
+            className="shine"
+            data-testid="composer-submit"
+            sx={{ minWidth: 96 }}
+          >
+            {busy ? <CircularProgress size={18} color="inherit" /> : "Share"}
+          </Button>
+        </Box>
+      </Box>
     </WidgetWrapper>
   );
 };

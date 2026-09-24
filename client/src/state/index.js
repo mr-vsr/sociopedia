@@ -21,27 +21,24 @@ export const authSlice = createSlice({
     setLogout: (state) => {
       state.user = null;
       state.token = null;
+      state.posts = [];
     },
     setFriends: (state, action) => {
-      if (state.user) {
-        state.user.friends = action.payload.friends;
-      } else {
-        console.error("user friends non-existent :(");
-      }
+      if (state.user) state.user.friends = action.payload.friends;
     },
     setPosts: (state, action) => {
-      state.posts = action.payload.posts;
+      state.posts = Array.isArray(action.payload.posts) ? action.payload.posts : [];
     },
     setPost: (state, action) => {
-      const updatedPosts = state.posts.map((post) => {
-        if (post._id === action.payload.post._id) return action.payload.post;
-        return post;
-      });
-      state.posts = updatedPosts;
+      const next = action.payload.post;
+      state.posts = state.posts.map((p) => (p._id === next._id ? next : p));
+    },
+    removePost: (state, action) => {
+      state.posts = state.posts.filter((p) => p._id !== action.payload.id);
     },
   },
 });
 
-export const { setMode, setLogin, setLogout, setFriends, setPosts, setPost } =
+export const { setMode, setLogin, setLogout, setFriends, setPosts, setPost, removePost } =
   authSlice.actions;
 export default authSlice.reducer;
