@@ -22,3 +22,6 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# user uploads (seed assets above stay tracked)
+/public/assets/[0-9]*-*.*
